@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useEffect, useTransition } from 'react'
 import { updatePassword } from '@/app/actions/settings'
+import { getWatermarkSetting, updateWatermarkSetting } from '@/app/actions/watermark'
 import { useTranslations } from 'next-intl'
+import type { WatermarkConfig, WatermarkPosition } from '@/types'
 
 export default function SettingsPage() {
   const [tokenVisible, setTokenVisible] = useState(false)
@@ -11,7 +13,25 @@ export default function SettingsPage() {
   const [newPassword, setNewPassword] = useState('')
   const [isPending, startTransition] = useTransition()
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  
+  // Watermark state
+  const [watermark, setWatermark] = useState<WatermarkConfig>({
+    isEnabled: false,
+    type: 'TEXT',
+    text: '@mychannel',
+    position: 'BOTTOM_RIGHT',
+    opacity: 0.7,
+    fontSize: 24,
+  })
+  const [watermarkStatus, setWatermarkStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [isSavingWatermark, setIsSavingWatermark] = useState(false)
+
   const t = useTranslations('Settings')
+  const tWm = useTranslations('Watermark')
+
+  useEffect(() => {
+    getWatermarkSetting().then(setWatermark)
+  }, [])
 
   function handleUpdatePassword(e: React.FormEvent) {
     e.preventDefault()
@@ -30,6 +50,20 @@ export default function SettingsPage() {
     })
   }
 
+  async function handleSaveWatermark(e: React.FormEvent) {
+    e.preventDefault()
+    setIsSavingWatermark(true)
+    setWatermarkStatus(null)
+    try {
+      await updateWatermarkSetting(watermark)
+      setWatermarkStatus({ type: 'success', message: tWm('SavedSuccess') })
+    } catch {
+      setWatermarkStatus({ type: 'error', message: tWm('SaveFailed') })
+    } finally {
+      setIsSavingWatermark(false)
+    }
+  }
+
   return (
     <div className="space-y-6 animate-fade-in max-w-4xl mx-auto">
       <div>
@@ -38,6 +72,110 @@ export default function SettingsPage() {
       </div>
 
       <div className="grid gap-6">
+        {/* Watermark Configuration */}
+        <div className="glass rounded-2xl p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              🛡️ {tWm('Title')}
+            </h3>
+            <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+              <span>{tWm('Enable')}</span>
+              <button
+                type="button"
+                onClick={() => setWatermark((prev) => ({ ...prev, isEnabled: !prev.isEnabled }))}
+                className={`w-9 h-5 rounded-full transition-colors relative p-0.5 ${watermark.isEnabled ? 'bg-indigo-600' : 'bg-gray-700'}`}
+              >
+                <div
+                  className={`w-4 h-4 rounded-full bg-white transition-transform ${watermark.isEnabled ? 'translate-x-4' : 'translate-x-0'}`}
+                />
+              </button>
+            </label>
+          </div>
+
+          <form onSubmit={handleSaveWatermark} className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm mb-1.5" style={{ color: 'hsl(215 15% 55%)' }}>
+                  {tWm('WatermarkText')}
+                </label>
+                <input
+                  type="text"
+                  value={watermark.text || ''}
+                  onChange={(e) => setWatermark((prev) => ({ ...prev, text: e.target.value }))}
+                  placeholder="@mychannel"
+                  className="form-input"
+                  disabled={!watermark.isEnabled}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm mb-1.5" style={{ color: 'hsl(215 15% 55%)' }}>
+                  {tWm('Position')}
+                </label>
+                <select
+                  value={watermark.position}
+                  onChange={(e) => setWatermark((prev) => ({ ...prev, position: e.target.value as WatermarkPosition }))}
+                  className="form-input"
+                  disabled={!watermark.isEnabled}
+                >
+                  <option value="BOTTOM_RIGHT">{tWm('BottomRight')}</option>
+                  <option value="BOTTOM_LEFT">{tWm('BottomLeft')}</option>
+                  <option value="TOP_RIGHT">{tWm('TopRight')}</option>
+                  <option value="TOP_LEFT">{tWm('TopLeft')}</option>
+                  <option value="CENTER">{tWm('Center')}</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm mb-1.5" style={{ color: 'hsl(215 15% 55%)' }}>
+                  {tWm('Opacity')} ({Math.round(watermark.opacity * 100)}%)
+                </label>
+                <input
+                  type="range"
+                  min="0.1"
+                  max="1.0"
+                  step="0.05"
+                  value={watermark.opacity}
+                  onChange={(e) => setWatermark((prev) => ({ ...prev, opacity: parseFloat(e.target.value) }))}
+                  className="w-full"
+                  disabled={!watermark.isEnabled}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm mb-1.5" style={{ color: 'hsl(215 15% 55%)' }}>
+                  {tWm('FontSize')} ({watermark.fontSize}px)
+                </label>
+                <input
+                  type="range"
+                  min="14"
+                  max="64"
+                  step="2"
+                  value={watermark.fontSize}
+                  onChange={(e) => setWatermark((prev) => ({ ...prev, fontSize: parseInt(e.target.value) }))}
+                  className="w-full"
+                  disabled={!watermark.isEnabled}
+                />
+              </div>
+            </div>
+
+            {watermarkStatus && (
+              <p className={`text-sm ${watermarkStatus.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                {watermarkStatus.message}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={isSavingWatermark}
+              className="px-6 py-2.5 rounded-xl font-medium text-white transition-all hover:scale-105 disabled:opacity-50"
+              style={{ background: 'hsl(250 85% 65%)' }}
+            >
+              {isSavingWatermark ? '⏳ ...' : tWm('SaveSettings')}
+            </button>
+          </form>
+        </div>
+
         {/* Bot Configuration */}
         <div className="glass rounded-2xl p-6">
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">{t('BotConfig')}</h3>
@@ -52,6 +190,7 @@ export default function SettingsPage() {
                   className="form-input flex-1 opacity-70 cursor-not-allowed"
                 />
                 <button
+                  type="button"
                   onClick={() => setTokenVisible(!tokenVisible)}
                   className="px-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
                 >

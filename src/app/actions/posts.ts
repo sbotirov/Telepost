@@ -1,16 +1,16 @@
 'use server'
 
 import { prisma } from '@/lib/db/prisma'
-import { sendPostToChannels } from '@/lib/telegram/sender'
+import { sendPostToChannels, editPublishedTelegramMessage } from '@/lib/telegram/sender'
 import { logAudit } from '@/lib/security/audit'
 import { revalidatePath } from 'next/cache'
-import type { CreatePostInput, PostFilter, DashboardStats } from '@/types'
+import type { CreatePostInput, EditPostInput, PostFilter, DashboardStats } from '@/types'
 
 export async function createPost(data: CreatePostInput) {
   if (data.draftId) {
     try {
       await prisma.post.delete({ where: { id: data.draftId } })
-    } catch (e) {
+    } catch {
       // Ignore if draft doesn't exist
     }
   }
@@ -29,6 +29,10 @@ export async function createPost(data: CreatePostInput) {
       ttsText: data.ttsText || null,
       ttsLanguage: data.ttsLanguage || null,
       ttsAudioPath: data.ttsAudioPath || null,
+      autoDeleteHours: data.autoDeleteHours || null,
+      isRecurring: data.isRecurring || false,
+      recurrenceRule: data.recurrenceRule ? JSON.stringify(data.recurrenceRule) : null,
+      recurrenceEndAt: data.recurrenceEndAt ? new Date(data.recurrenceEndAt) : null,
       status: data.scheduledAt ? 'SCHEDULED' : 'DRAFT',
       scheduledAt: data.scheduledAt ? new Date(data.scheduledAt) : null,
       channels: {
@@ -104,11 +108,18 @@ export async function sendPostNow(postId: string) {
     .filter(([, r]) => !r.success)
     .map(([chatId, r]) => ({ chatId, error: r.error }))
 
+  // Calculate auto-delete date if configured
+  let autoDeleteAt: Date | null = null
+  if (allSuccess && post.autoDeleteHours && post.autoDeleteHours > 0) {
+    autoDeleteAt = new Date(Date.now() + post.autoDeleteHours * 3600 * 1000)
+  }
+
   const updated = await prisma.post.update({
     where: { id: postId },
     data: {
       status: allSuccess ? 'SENT' : 'FAILED',
       sentAt: allSuccess ? new Date() : null,
+      autoDeleteAt,
       telegramMsgIds: JSON.stringify(messageIds),
       errorMessage: errors.length > 0 ? JSON.stringify(errors) : null,
     },
@@ -120,6 +131,60 @@ export async function sendPostNow(postId: string) {
   revalidatePath('/dashboard/scheduled')
 
   return { success: allSuccess, errors, post: updated }
+}
+
+export async function editPublishedPost(data: EditPostInput) {
+  const post = await prisma.post.findUnique({
+    where: { id: data.postId },
+    include: {
+      channels: { include: { channel: true } },
+      mediaFiles: true,
+      poll: true,
+    },
+  })
+
+  if (!post) throw new Error('Post not found')
+  if (post.status !== 'SENT' || !post.telegramMsgIds) {
+    throw new Error('Can only edit published posts with Telegram message records')
+  }
+
+  const messageList = JSON.parse(post.telegramMsgIds) as Array<{ chatId: string; messageId: number }>
+  const editPayload = {
+    type: post.type,
+    text: data.text || null,
+    parseMode: data.parseMode,
+    inlineKeyboard: data.inlineKeyboard ? JSON.stringify(data.inlineKeyboard) : null,
+  }
+
+  const editErrors: Array<{ chatId: string; error?: string }> = []
+
+  for (const item of messageList) {
+    if (item.chatId && item.messageId) {
+      const res = await editPublishedTelegramMessage(item.chatId, item.messageId, editPayload)
+      if (!res.success) {
+        editErrors.push({ chatId: item.chatId, error: res.error })
+      }
+    }
+  }
+
+  const updated = await prisma.post.update({
+    where: { id: data.postId },
+    data: {
+      text: data.text || null,
+      parseMode: data.parseMode,
+      inlineKeyboard: editPayload.inlineKeyboard,
+    },
+  })
+
+  await logAudit('post.edit_published', { postId: data.postId, errors: editErrors.length })
+  revalidatePath('/dashboard')
+  revalidatePath('/dashboard/history')
+
+  return {
+    success: editErrors.length === 0,
+    errors: editErrors,
+    post: updated,
+  }
 }
 
 export async function schedulePost(postId: string, scheduledAt: string) {

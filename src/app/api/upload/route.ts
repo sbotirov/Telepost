@@ -17,7 +17,14 @@ export async function POST(request: NextRequest) {
     }
 
     const subdir = (formData.get('subdir') as string) || 'media'
+    const applyWatermark = formData.get('watermark') === 'true'
     const result = await saveUploadedFile(file, subdir)
+
+    if (applyWatermark && file.type.startsWith('image/')) {
+      const { processImageWatermark } = await import('@/app/actions/watermark')
+      const watermarkedPath = await processImageWatermark(result.filePath)
+      result.filePath = watermarkedPath
+    }
 
     return NextResponse.json(result)
   } catch (error) {

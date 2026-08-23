@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import { useEffect } from 'react'
 import { getChannels } from '@/app/actions/channels'
 import { createPost, sendPostNow } from '@/app/actions/posts'
-import type { ChannelInfo, PostType, InlineKeyboard, PollInput, PostOptions, MediaFileInput } from '@/types'
+import type { ChannelInfo, PostType, InlineKeyboard, PollInput, PostOptions, MediaFileInput, RecurrenceRule, TemplateItem } from '@/types'
 import TextEditor from './TextEditor'
 import MediaUploader from './MediaUploader'
 import TtsGenerator from './TtsGenerator'
@@ -14,15 +14,63 @@ import SchedulePicker from './SchedulePicker'
 import HashtagInput from './HashtagInput'
 import PostOptions_ from './PostOptions'
 import PostPreview from './PostPreview'
+import TemplatePicker from './TemplatePicker'
 import { useTranslations } from 'next-intl'
 
+interface DraftChannel {
+  channelId: string
+  [key: string]: unknown
+}
+
+interface DraftMediaFile {
+  filePath: string
+  fileName: string
+  fileSize: number
+  mimeType: string
+  type: string
+  caption?: string | null
+  sortOrder?: number
+  [key: string]: unknown
+}
+
+interface DraftPost {
+  id?: string
+  text?: string | null
+  hashtags?: string | null
+  parseMode?: string
+  mediaFiles?: DraftMediaFile[]
+  ttsAudioPath?: string | null
+  ttsText?: string | null
+  ttsLanguage?: string | null
+  poll?: {
+    question?: string
+    options?: string | string[]
+    isAnonymous?: boolean
+    type?: string
+    correctOption?: number | null
+    explanation?: string | null
+    multiAnswer?: boolean
+    [key: string]: unknown
+  } | null
+  inlineKeyboard?: string | null
+  channels?: DraftChannel[]
+  disableComments?: boolean
+  disableNotification?: boolean
+  protectContent?: boolean
+  pinMessage?: boolean
+  autoDeleteHours?: number | null
+  isRecurring?: boolean
+  recurrenceRule?: string | null
+  [key: string]: unknown
+}
+
 interface Props {
-  draft?: any
+  draft?: DraftPost | null
 }
 
 export default function PostComposer({ draft }: Props) {
   const [channels, setChannels] = useState<ChannelInfo[]>([])
-  const [selectedChannels, setSelectedChannels] = useState<string[]>(draft?.channels?.map((c: any) => c.channelId) || [])
+  const [selectedChannels, setSelectedChannels] = useState<string[]>(draft?.channels?.map((c) => c.channelId) || [])
   const [text, setText] = useState(() => {
     if (!draft?.text) return ''
     if (draft.hashtags) {
@@ -31,17 +79,40 @@ export default function PostComposer({ draft }: Props) {
     }
     return draft.text
   })
-  const [parseMode, setParseMode] = useState<'HTML' | 'MarkdownV2'>(draft?.parseMode || 'HTML')
-  const [mediaFiles, setMediaFiles] = useState<MediaFileInput[]>(draft?.mediaFiles || [])
+  const [parseMode, setParseMode] = useState<'HTML' | 'MarkdownV2'>(
+    (draft?.parseMode as 'HTML' | 'MarkdownV2') || 'HTML'
+  )
+  const [mediaFiles, setMediaFiles] = useState<MediaFileInput[]>(() => {
+    if (!draft?.mediaFiles) return []
+    return draft.mediaFiles.map((m, idx) => ({
+      filePath: m.filePath,
+      fileName: m.fileName,
+      fileSize: m.fileSize,
+      mimeType: m.mimeType,
+      type: m.type as MediaFileInput['type'],
+      caption: m.caption || undefined,
+      sortOrder: m.sortOrder ?? idx,
+    }))
+  })
   const [ttsAudioPath, setTtsAudioPath] = useState<string | null>(draft?.ttsAudioPath || null)
   const [ttsText, setTtsText] = useState(draft?.ttsText || '')
   const [ttsLanguage, setTtsLanguage] = useState(draft?.ttsLanguage || 'uz-UZ') // Default to Uzbek as requested
   const [pollEnabled, setPollEnabled] = useState(!!draft?.poll)
-  const [poll, setPoll] = useState<PollInput>(
-    draft?.poll
-      ? { ...draft.poll, options: typeof draft.poll.options === 'string' ? JSON.parse(draft.poll.options) : draft.poll.options }
-      : { question: '', options: ['', ''], isAnonymous: true, type: 'regular', multiAnswer: false }
-  )
+  const [poll, setPoll] = useState<PollInput>(() => {
+    if (draft?.poll) {
+      const opts = typeof draft.poll.options === 'string' ? JSON.parse(draft.poll.options) : draft.poll.options
+      return {
+        question: draft.poll.question || '',
+        options: Array.isArray(opts) ? opts : ['', ''],
+        isAnonymous: draft.poll.isAnonymous ?? true,
+        type: (draft.poll.type as 'regular' | 'quiz') || 'regular',
+        correctOption: draft.poll.correctOption ?? undefined,
+        explanation: draft.poll.explanation ?? undefined,
+        multiAnswer: draft.poll.multiAnswer ?? false,
+      }
+    }
+    return { question: '', options: ['', ''], isAnonymous: true, type: 'regular', multiAnswer: false }
+  })
   const [keyboard, setKeyboard] = useState<InlineKeyboard>(draft?.inlineKeyboard ? JSON.parse(draft.inlineKeyboard) : [])
   const [hashtags, setHashtags] = useState<string[]>(draft?.hashtags ? draft.hashtags.split(',') : [])
   const [options, setOptions] = useState<PostOptions>({
@@ -50,6 +121,11 @@ export default function PostComposer({ draft }: Props) {
     protectContent: draft?.protectContent || false,
     pinMessage: draft?.pinMessage || false,
   })
+  const [autoDeleteHours, setAutoDeleteHours] = useState<number | null>(draft?.autoDeleteHours || null)
+  const [isRecurring, setIsRecurring] = useState<boolean>(draft?.isRecurring || false)
+  const [recurrenceRule, setRecurrenceRule] = useState<RecurrenceRule | null>(
+    draft?.recurrenceRule ? JSON.parse(draft.recurrenceRule) : null
+  )
   const [scheduleMode, setScheduleMode] = useState<'now' | 'schedule'>('now')
   const [scheduledAt, setScheduledAt] = useState('')
   const [isPending, startTransition] = useTransition()
@@ -83,6 +159,24 @@ export default function PostComposer({ draft }: Props) {
     return fullText
   }
 
+  function handleApplyTemplate(template: TemplateItem) {
+    setText(template.content)
+    if (template.hashtags) {
+      setHashtags(template.hashtags.split(','))
+    }
+    if (template.inlineKeyboard) {
+      try {
+        setKeyboard(JSON.parse(template.inlineKeyboard))
+      } catch {
+        // Ignore
+      }
+    }
+  }
+
+  function handleInsertSignature(signature: string) {
+    setText((prev: string) => (prev ? `${prev}\n\n${signature}` : signature))
+  }
+
   async function handleSubmit(action: 'send' | 'schedule' | 'draft') {
     if (selectedChannels.length === 0) {
       setStatus({ type: 'error', message: t('SelectChannelErr') })
@@ -105,6 +199,9 @@ export default function PostComposer({ draft }: Props) {
           ttsText: ttsText || undefined,
           ttsLanguage: ttsLanguage || undefined,
           ttsAudioPath: ttsAudioPath || undefined,
+          autoDeleteHours,
+          isRecurring,
+          recurrenceRule: isRecurring ? recurrenceRule : null,
           scheduledAt: action === 'schedule' ? new Date(scheduledAt).toISOString() : null,
           draftId: draft?.id,
         }
@@ -140,6 +237,9 @@ export default function PostComposer({ draft }: Props) {
     setPoll({ question: '', options: ['', ''], isAnonymous: true, type: 'regular', multiAnswer: false })
     setKeyboard([])
     setHashtags([])
+    setAutoDeleteHours(null)
+    setIsRecurring(false)
+    setRecurrenceRule(null)
     setScheduleMode('now')
     setScheduledAt('')
   }
@@ -157,6 +257,7 @@ export default function PostComposer({ draft }: Props) {
             ) : (
               <>
                 <button
+                  type="button"
                   onClick={() => setSelectedChannels(selectedChannels.length === channels.length ? [] : channels.map((c) => c.id))}
                   className="text-xs px-3 py-1.5 rounded-lg transition-colors"
                   style={{ background: 'hsl(224 20% 14%)', color: 'hsl(215 15% 55%)' }}
@@ -168,6 +269,7 @@ export default function PostComposer({ draft }: Props) {
                   return (
                     <button
                       key={ch.id}
+                      type="button"
                       onClick={() => setSelectedChannels(selected ? selectedChannels.filter((id) => id !== ch.id) : [...selectedChannels, ch.id])}
                       className="px-3 py-1.5 rounded-xl text-sm transition-all duration-200"
                       style={{
@@ -185,14 +287,41 @@ export default function PostComposer({ draft }: Props) {
           </div>
         </div>
 
+        {/* Template & Signature Picker */}
+        <div className="flex justify-end">
+          <TemplatePicker
+            onApplyTemplate={handleApplyTemplate}
+            onInsertSignature={handleInsertSignature}
+            currentText={text}
+            currentHashtags={hashtags}
+            currentKeyboard={keyboard}
+          />
+        </div>
+
         <TextEditor value={text} onChange={setText} parseMode={parseMode} onParseModeChange={setParseMode} />
         <MediaUploader files={mediaFiles} onFilesChange={setMediaFiles} />
         <TtsGenerator onAudioGenerated={(path) => setTtsAudioPath(path)} ttsText={ttsText} onTtsTextChange={setTtsText} ttsLanguage={ttsLanguage} onTtsLanguageChange={setTtsLanguage} />
         <HashtagInput hashtags={hashtags} onHashtagsChange={setHashtags} />
-        <PostOptions_ options={options} onOptionsChange={setOptions} />
+        <PostOptions_
+          options={options}
+          autoDeleteHours={autoDeleteHours}
+          onOptionsChange={setOptions}
+          onAutoDeleteHoursChange={setAutoDeleteHours}
+        />
         <PollCreator poll={poll} onPollChange={setPoll} enabled={pollEnabled} onToggle={setPollEnabled} />
         <InlineKeyboardBuilder keyboard={keyboard} onKeyboardChange={setKeyboard} />
-        <SchedulePicker mode={scheduleMode} scheduledAt={scheduledAt} onModeChange={setScheduleMode} onDateTimeChange={setScheduledAt} />
+        <SchedulePicker
+          mode={scheduleMode}
+          scheduledAt={scheduledAt}
+          isRecurring={isRecurring}
+          recurrenceRule={recurrenceRule}
+          onModeChange={setScheduleMode}
+          onDateTimeChange={setScheduledAt}
+          onRecurringChange={(rec, rule) => {
+            setIsRecurring(rec)
+            setRecurrenceRule(rule)
+          }}
+        />
 
         {/* Status Message */}
         {status && (
@@ -204,6 +333,7 @@ export default function PostComposer({ draft }: Props) {
         {/* Action Buttons */}
         <div className="flex flex-wrap gap-3">
           <button
+            type="button"
             onClick={() => handleSubmit('send')}
             disabled={isPending}
             className="flex-1 min-w-[140px] py-3 rounded-xl font-semibold text-white transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 glow-effect"
@@ -213,6 +343,7 @@ export default function PostComposer({ draft }: Props) {
           </button>
           {scheduleMode === 'schedule' && (
             <button
+              type="button"
               onClick={() => handleSubmit('schedule')}
               disabled={isPending || !scheduledAt}
               className="flex-1 min-w-[140px] py-3 rounded-xl font-semibold transition-all hover:scale-[1.02] disabled:opacity-50"
@@ -222,6 +353,7 @@ export default function PostComposer({ draft }: Props) {
             </button>
           )}
           <button
+            type="button"
             onClick={() => handleSubmit('draft')}
             disabled={isPending}
             className="py-3 px-6 rounded-xl font-semibold transition-all hover:bg-white/5 disabled:opacity-50"

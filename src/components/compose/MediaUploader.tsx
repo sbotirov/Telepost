@@ -23,6 +23,7 @@ export default function MediaUploader({ files, onFilesChange }: Props) {
   const [activeType, setActiveType] = useState<MediaType>('PHOTO')
   const [dragOver, setDragOver] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [watermarkEnabled, setWatermarkEnabled] = useState(false)
 
   async function uploadFile(file: File, type: MediaType) {
     setUploading(true)
@@ -30,6 +31,9 @@ export default function MediaUploader({ files, onFilesChange }: Props) {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('subdir', type.toLowerCase())
+      if (watermarkEnabled && type === 'PHOTO') {
+        formData.append('watermark', 'true')
+      }
 
       const res = await fetch('/api/upload', { method: 'POST', body: formData })
       if (!res.ok) throw new Error('Upload failed')
@@ -77,17 +81,31 @@ export default function MediaUploader({ files, onFilesChange }: Props) {
       <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">📎 {t('MediaTab')}</h3>
 
       {/* Type buttons */}
-      <div className="flex gap-2 mb-3">
-        {typeConfig.map((tc) => (
-          <button
-            key={tc.type}
-            onClick={() => { setActiveType(tc.type); fileInputRef.current?.click() }}
-            className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all hover:bg-white/10"
-            style={{ background: 'hsl(224 20% 14%)', color: 'hsl(215 15% 55%)' }}
-          >
-            {tc.icon} {t(tc.label)}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <div className="flex gap-2">
+          {typeConfig.map((tc) => (
+            <button
+              key={tc.type}
+              type="button"
+              onClick={() => { setActiveType(tc.type); fileInputRef.current?.click() }}
+              className="px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all hover:bg-white/10"
+              style={{ background: 'hsl(224 20% 14%)', color: 'hsl(215 15% 55%)' }}
+            >
+              {tc.icon} {t(tc.label)}
+            </button>
+          ))}
+        </div>
+
+        {/* Watermark toggle */}
+        <label className="flex items-center gap-1.5 text-xs cursor-pointer select-none px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition-colors" style={{ color: watermarkEnabled ? 'hsl(250 85% 65%)' : 'hsl(215 15% 55%)' }}>
+          <input
+            type="checkbox"
+            checked={watermarkEnabled}
+            onChange={(e) => setWatermarkEnabled(e.target.checked)}
+            className="rounded border-gray-700 text-indigo-600 focus:ring-0"
+          />
+          <span>🛡️ {t('WatermarkPhoto')}</span>
+        </label>
       </div>
 
       {/* Drop zone */}

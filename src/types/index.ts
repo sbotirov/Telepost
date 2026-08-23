@@ -57,6 +57,13 @@ export interface MediaFileInput {
   sortOrder: number
 }
 
+export interface RecurrenceRule {
+  type: 'DAILY' | 'WEEKLY' | 'INTERVAL_HOURS'
+  interval?: number // e.g. every 2 days, every 6 hours
+  days?: number[] // 0 for Sun, 1 for Mon...
+  endAt?: string | null
+}
+
 export interface CreatePostInput {
   type: PostType
   text?: string
@@ -72,12 +79,57 @@ export interface CreatePostInput {
   ttsAudioPath?: string
   scheduledAt?: string | null
   draftId?: string
+  autoDeleteHours?: number | null
+  isRecurring?: boolean
+  recurrenceRule?: RecurrenceRule | null
+  recurrenceEndAt?: string | null
 }
 
 export interface SendResult {
   success: boolean
   messageId?: number
   error?: string
+}
+
+export interface EditPostInput {
+  postId: string
+  text?: string
+  parseMode: 'HTML' | 'MarkdownV2'
+  inlineKeyboard?: InlineKeyboard
+}
+
+export interface TemplateItem {
+  id: string
+  name: string
+  type: 'TEMPLATE' | 'SIGNATURE'
+  content: string
+  hashtags?: string | null
+  inlineKeyboard?: string | null
+  isDefault: boolean
+  createdAt: Date
+  updatedAt: Date
+}
+
+export interface TemplateInput {
+  name: string
+  type: 'TEMPLATE' | 'SIGNATURE'
+  content: string
+  hashtags?: string
+  inlineKeyboard?: InlineKeyboard
+  isDefault?: boolean
+}
+
+export type WatermarkPosition = 'TOP_LEFT' | 'TOP_RIGHT' | 'BOTTOM_LEFT' | 'BOTTOM_RIGHT' | 'CENTER'
+
+export interface WatermarkConfig {
+  id?: string
+  isEnabled: boolean
+  type: 'TEXT' | 'IMAGE'
+  text?: string | null
+  imagePath?: string | null
+  position: WatermarkPosition
+  opacity: number
+  fontSize: number
 }
 
 export interface DashboardStats {
@@ -103,3 +155,4 @@ export interface PaginatedResult<T> {
   limit: number
   totalPages: number
 }
+

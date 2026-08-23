@@ -6,8 +6,23 @@ import { format } from 'date-fns'
 import { useTranslations } from 'next-intl'
 import ConfirmModal from '@/components/ui/ConfirmModal'
 
+interface ScheduledChannel {
+  channelId: string
+  channel: {
+    title: string
+  }
+}
+
+interface ScheduledPostItem {
+  id: string
+  type: string
+  text?: string | null
+  scheduledAt: string | Date | null
+  channels: ScheduledChannel[]
+}
+
 export default function ScheduledPage() {
-  const [posts, setPosts] = useState<any[]>([])
+  const [posts, setPosts] = useState<ScheduledPostItem[]>([])
   const [isPending, startTransition] = useTransition()
   const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean, postId: string }>({ isOpen: false, postId: '' })
   const t = useTranslations('Scheduled')
@@ -18,7 +33,7 @@ export default function ScheduledPage() {
 
   async function loadPosts() {
     const data = await getScheduledPosts()
-    setPosts(data)
+    setPosts(data as unknown as ScheduledPostItem[])
   }
 
   function requestCancel(postId: string) {
@@ -61,7 +76,7 @@ export default function ScheduledPage() {
               <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-4 rounded-2xl glass hover:scale-[1.01] transition-transform">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-semibold" style={{ color: 'hsl(38 95% 55%)' }}>
-                    {format(new Date(post.scheduledAt), 'MMM d, yyyy h:mm a')}
+                    {post.scheduledAt ? format(new Date(post.scheduledAt), 'MMM d, yyyy h:mm a') : ''}
                   </span>
                   <span className="text-xs px-2 py-0.5 rounded bg-white/5">{post.type}</span>
                 </div>
@@ -70,7 +85,7 @@ export default function ScheduledPage() {
                 
                 <div className="flex items-center justify-between">
                   <div className="flex gap-1 overflow-x-auto no-scrollbar">
-                    {post.channels.map((pc: any) => (
+                    {post.channels.map((pc) => (
                       <span key={pc.channelId} className="text-[10px] px-2 py-1 rounded-full bg-white/5 whitespace-nowrap">
                         📢 {pc.channel.title}
                       </span>

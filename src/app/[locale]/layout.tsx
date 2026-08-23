@@ -1,12 +1,9 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import '../globals.css'
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages } from 'next-intl/server';
 import { notFound } from 'next/navigation';
 import { routing } from '@/i18n/routing';
-
-const inter = Inter({ subsets: ['latin', 'cyrillic'], variable: '--font-inter' })
 
 export const metadata: Metadata = {
   title: 'TelePost Dashboard',
@@ -21,7 +18,7 @@ export default async function RootLayout(props: {
   const { children } = props;
 
   // Ensure that the incoming `locale` is valid
-  if (!routing.locales.includes(locale as any)) {
+  if (!routing.locales.includes(locale as (typeof routing.locales)[number])) {
     notFound();
   }
  
@@ -31,7 +28,7 @@ export default async function RootLayout(props: {
 
   return (
     <html lang={locale} className="dark">
-      <body className={`${inter.variable} font-sans antialiased`}>
+      <body className="font-sans antialiased">
         <NextIntlClientProvider messages={messages}>
           {children}
         </NextIntlClientProvider>

@@ -5,7 +5,10 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
 const nextConfig: NextConfig = {
   output: 'standalone',
-  serverExternalPackages: ['winston', 'winston-daily-rotate-file'],
+  serverExternalPackages: ['winston', 'winston-daily-rotate-file', 'sharp'],
+  turbopack: {
+    root: __dirname,
+  },
   async headers() {
     return [
       {

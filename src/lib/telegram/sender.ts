@@ -321,3 +321,68 @@ export async function sendPostToChannels(
 
   return results
 }
+
+export async function editPublishedTelegramMessage(
+  chatId: string,
+  messageId: number,
+  post: {
+    type: string
+    text?: string | null
+    parseMode: string
+    inlineKeyboard?: string | null
+  }
+): Promise<SendResult> {
+  try {
+    const bot = getBot()
+    if (!bot) return { success: false, error: 'Bot not configured' }
+
+    const keyboard: IKB | undefined = post.inlineKeyboard
+      ? JSON.parse(post.inlineKeyboard)
+      : undefined
+
+    const reply_markup = keyboard ? buildInlineKeyboard(keyboard) : undefined
+
+    if (post.type === 'TEXT') {
+      await bot.api.editMessageText(chatId, messageId, post.text || '', {
+        parse_mode: post.parseMode as 'HTML' | 'MarkdownV2',
+        reply_markup,
+      })
+    } else if (post.type === 'POLL') {
+      // Telegram Polls cannot have their questions/options edited via Bot API
+      return { success: false, error: 'Poll messages cannot be edited in Telegram' }
+    } else {
+      // PHOTO, VIDEO, AUDIO, DOCUMENT, TTS, MEDIA_GROUP
+      await bot.api.editMessageCaption(chatId, messageId, {
+        caption: post.text || undefined,
+        parse_mode: post.parseMode as 'HTML' | 'MarkdownV2',
+        reply_markup,
+      })
+    }
+
+    logger.info(`Message ${messageId} in ${chatId} edited successfully`)
+    return { success: true, messageId }
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : 'Unknown error'
+    logger.error(`Failed to edit message ${messageId} in ${chatId}`, { error: errMsg })
+    return { success: false, error: errMsg }
+  }
+}
+
+export async function deleteTelegramMessage(
+  chatId: string,
+  messageId: number
+): Promise<SendResult> {
+  try {
+    const bot = getBot()
+    if (!bot) return { success: false, error: 'Bot not configured' }
+
+    await bot.api.deleteMessage(chatId, messageId)
+    logger.info(`Message ${messageId} in ${chatId} deleted from Telegram`)
+    return { success: true, messageId }
+  } catch (error) {
+    const errMsg = error instanceof Error ? error.message : 'Unknown error'
+    logger.error(`Failed to delete message ${messageId} in ${chatId}`, { error: errMsg })
+    return { success: false, error: errMsg }
+  }
+}
+

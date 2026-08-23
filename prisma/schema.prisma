@@ -39,6 +39,12 @@ model Post {
   ttsText             String?
   ttsLanguage         String?
   ttsAudioPath        String?
+  autoDeleteHours     Int?
+  autoDeleteAt        DateTime?
+  isDeletedFromTelegram Boolean   @default(false)
+  isRecurring         Boolean       @default(false)
+  recurrenceRule      String?
+  recurrenceEndAt     DateTime?
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @updatedAt
   channels            PostChannel[]
@@ -81,6 +87,31 @@ model Poll {
   multiAnswer   Boolean @default(false)
   postId        String  @unique
   post          Post    @relation(fields: [postId], references: [id], onDelete: Cascade)
+}
+
+model Template {
+  id             String   @id @default(cuid())
+  name           String
+  type           String   @default("TEMPLATE") // "TEMPLATE" or "SIGNATURE"
+  content        String
+  hashtags       String?
+  inlineKeyboard String?
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model WatermarkSetting {
+  id        String   @id @default(cuid())
+  isEnabled Boolean  @default(false)
+  type      String   @default("TEXT") // "TEXT" or "IMAGE"
+  text      String?  @default("@channel")
+  imagePath String?
+  position  String   @default("BOTTOM_RIGHT") // "TOP_LEFT", "TOP_RIGHT", "BOTTOM_LEFT", "BOTTOM_RIGHT", "CENTER"
+  opacity   Float    @default(0.7)
+  fontSize  Int      @default(24)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model AuditLog {

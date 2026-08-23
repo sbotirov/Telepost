@@ -15,6 +15,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   // Try to match the pathname to a translation key
   let titleKey = 'Overview'
   if (pathname.includes('/compose')) titleKey = 'Compose'
+  else if (pathname.includes('/templates')) titleKey = 'Templates'
   else if (pathname.includes('/channels')) titleKey = 'Channels'
   else if (pathname.includes('/scheduled')) titleKey = 'Scheduled'
   else if (pathname.includes('/history')) titleKey = 'History'

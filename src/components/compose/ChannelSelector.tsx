@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useTransition } from 'react'
+import { useState, useEffect } from 'react'
 import { getChannels } from '@/app/actions/channels'
 import type { ChannelInfo } from '@/types'
 
