@@ -2,6 +2,7 @@
 
 import { prisma } from '@/lib/db/prisma'
 import { sendPostToChannels, editPublishedTelegramMessage } from '@/lib/telegram/sender'
+import { sendAdminFailureAlert, sendAdminSuccessAlert } from '@/lib/telegram/alerts'
 import { logAudit } from '@/lib/security/audit'
 import { revalidatePath } from 'next/cache'
 import type { CreatePostInput, EditPostInput, PostFilter, DashboardStats } from '@/types'
@@ -106,7 +107,7 @@ export async function sendPostNow(postId: string) {
     .map(([chatId, r]) => ({ chatId, messageId: r.messageId }))
   const errors = Array.from(results.entries())
     .filter(([, r]) => !r.success)
-    .map(([chatId, r]) => ({ chatId, error: r.error }))
+    .map(([chatId, r]) => ({ chatId, error: r.error || 'Unknown error' }))
 
   // Calculate auto-delete date if configured
   let autoDeleteAt: Date | null = null
@@ -125,10 +126,25 @@ export async function sendPostNow(postId: string) {
     },
   })
 
+  // Trigger admin alerts
+  const channelTitles = post.channels.map((pc) => pc.channel.title)
+  if (!allSuccess || errors.length > 0) {
+    sendAdminFailureAlert({
+      postId,
+      type: post.type,
+      text: post.text,
+      channelTitles,
+      errors,
+    }).catch(() => {})
+  } else {
+    sendAdminSuccessAlert(postId, post.type, channelTitles).catch(() => {})
+  }
+
   await logAudit('post.send', { postId, success: allSuccess, channels: channelChatIds.length })
   revalidatePath('/dashboard')
   revalidatePath('/dashboard/history')
   revalidatePath('/dashboard/scheduled')
+  revalidatePath('/dashboard/analytics')
 
   return { success: allSuccess, errors, post: updated }
 }

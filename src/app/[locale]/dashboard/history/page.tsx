@@ -8,7 +8,8 @@ import { useTranslations } from 'next-intl'
 import Link from 'next/link'
 import ConfirmModal from '@/components/ui/ConfirmModal'
 import EditPostModal from '@/components/history/EditPostModal'
-import type { PostFilter, PostStatus } from '@/types'
+import MetricUpdateModal from '@/components/analytics/MetricUpdateModal'
+import type { PostFilter, PostStatus, TopPostItem, PostType } from '@/types'
 
 const statusColors: Record<string, string> = {
   SENT: 'status-sent',
@@ -21,6 +22,7 @@ const statusColors: Record<string, string> = {
 interface HistoryChannel {
   channelId: string
   channel: {
+    id?: string
     title: string
     [key: string]: unknown
   }
@@ -37,6 +39,9 @@ interface HistoryPost {
   autoDeleteAt?: string | Date | null
   isDeletedFromTelegram?: boolean
   isRecurring?: boolean
+  viewsCount?: number
+  forwardsCount?: number
+  reactionsCount?: number
   channels: HistoryChannel[]
   [key: string]: unknown
 }
@@ -53,6 +58,7 @@ export default function HistoryPage() {
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const t = useTranslations('History')
+  const tAnalytics = useTranslations('Analytics')
   
   // Filters
   const [search, setSearch] = useState('')
@@ -60,6 +66,7 @@ export default function HistoryPage() {
   const [status, setStatus] = useState('')
   const [confirmModal, setConfirmModal] = useState<{ isOpen: boolean, postId: string }>({ isOpen: false, postId: '' })
   const [editingPost, setEditingPost] = useState<HistoryPost | null>(null)
+  const [metricPost, setMetricPost] = useState<TopPostItem | null>(null)
 
   useEffect(() => {
     getChannels().then((data) => setChannels(data as unknown as ChannelOption[]))
@@ -145,6 +152,7 @@ export default function HistoryPage() {
                   <th className="px-4 py-3 font-medium">{t('ColType')}</th>
                   <th className="px-4 py-3 font-medium">{t('ColContent')}</th>
                   <th className="px-4 py-3 font-medium">{t('ColChannels')}</th>
+                  <th className="px-4 py-3 font-medium">{tAnalytics('Metrics')}</th>
                   <th className="px-4 py-3 font-medium">{t('ColStatus')}</th>
                   <th className="px-4 py-3 font-medium">{t('ColDate')}</th>
                   <th className="px-4 py-3 font-medium text-right">{t('ColActions')}</th>
@@ -185,6 +193,34 @@ export default function HistoryPage() {
                           <span className="px-1.5 py-0.5 rounded-full bg-white/5 text-[10px]">+{post.channels.length - 2}</span>
                         )}
                       </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {post.status === 'SENT' ? (
+                        <button
+                          onClick={() =>
+                            setMetricPost({
+                              id: post.id,
+                              type: post.type as PostType,
+                              text: post.text,
+                              viewsCount: post.viewsCount || 0,
+                              forwardsCount: post.forwardsCount || 0,
+                              reactionsCount: post.reactionsCount || 0,
+                              channels: post.channels.map((pc) => ({
+                                channelId: pc.channelId,
+                                title: pc.channel?.title || 'Channel',
+                              })),
+                            })
+                          }
+                          className="flex items-center gap-2 text-xs font-mono px-2 py-1 rounded-lg bg-black/20 hover:bg-white/10 transition-colors border border-white/5"
+                          title={tAnalytics('EditMetrics')}
+                        >
+                          <span style={{ color: 'hsl(250 85% 65%)' }}>👁️ {post.viewsCount || 0}</span>
+                          <span style={{ color: 'hsl(175 80% 50%)' }}>🔁 {post.forwardsCount || 0}</span>
+                          <span style={{ color: 'hsl(340 85% 60%)' }}>❤️ {post.reactionsCount || 0}</span>
+                        </button>
+                      ) : (
+                        <span className="text-xs text-gray-500">-</span>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-1 rounded-full text-[10px] font-medium ${statusColors[post.status] || 'status-draft'}`}>
@@ -241,6 +277,14 @@ export default function HistoryPage() {
           </div>
         )}
       </div>
+
+      {/* Metric Update Modal */}
+      <MetricUpdateModal
+        isOpen={!!metricPost}
+        post={metricPost}
+        onClose={() => setMetricPost(null)}
+        onSuccess={() => loadPosts()}
+      />
 
       <ConfirmModal
         isOpen={confirmModal.isOpen}

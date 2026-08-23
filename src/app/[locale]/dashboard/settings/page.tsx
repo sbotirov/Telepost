@@ -3,8 +3,9 @@
 import { useState, useEffect, useTransition } from 'react'
 import { updatePassword } from '@/app/actions/settings'
 import { getWatermarkSetting, updateWatermarkSetting } from '@/app/actions/watermark'
+import { getAdminSettings, updateAdminSettings } from '@/app/actions/analytics'
 import { useTranslations } from 'next-intl'
-import type { WatermarkConfig, WatermarkPosition } from '@/types'
+import type { WatermarkConfig, WatermarkPosition, AdminSettingConfig } from '@/types'
 
 export default function SettingsPage() {
   const [tokenVisible, setTokenVisible] = useState(false)
@@ -26,11 +27,22 @@ export default function SettingsPage() {
   const [watermarkStatus, setWatermarkStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [isSavingWatermark, setIsSavingWatermark] = useState(false)
 
+  // Admin Alert Settings state
+  const [adminSetting, setAdminSetting] = useState<AdminSettingConfig>({
+    adminChatId: '',
+    notifyOnFailure: true,
+    notifyOnSuccess: false,
+  })
+  const [adminSettingStatus, setAdminSettingStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+  const [isSavingAdminSetting, setIsSavingAdminSetting] = useState(false)
+
   const t = useTranslations('Settings')
   const tWm = useTranslations('Watermark')
+  const tAlerts = useTranslations('Alerts')
 
   useEffect(() => {
     getWatermarkSetting().then(setWatermark)
+    getAdminSettings().then(setAdminSetting)
   }, [])
 
   function handleUpdatePassword(e: React.FormEvent) {
@@ -61,6 +73,20 @@ export default function SettingsPage() {
       setWatermarkStatus({ type: 'error', message: tWm('SaveFailed') })
     } finally {
       setIsSavingWatermark(false)
+    }
+  }
+
+  async function handleSaveAdminSettings(e: React.FormEvent) {
+    e.preventDefault()
+    setIsSavingAdminSetting(true)
+    setAdminSettingStatus(null)
+    try {
+      await updateAdminSettings(adminSetting)
+      setAdminSettingStatus({ type: 'success', message: tAlerts('SavedSuccess') })
+    } catch {
+      setAdminSettingStatus({ type: 'error', message: tAlerts('SaveFailed') })
+    } finally {
+      setIsSavingAdminSetting(false)
     }
   }
 
@@ -172,6 +198,77 @@ export default function SettingsPage() {
               style={{ background: 'hsl(250 85% 65%)' }}
             >
               {isSavingWatermark ? '⏳ ...' : tWm('SaveSettings')}
+            </button>
+          </form>
+        </div>
+
+        {/* Failure Alerts & Admin Notifications */}
+        <div className="glass rounded-2xl p-6">
+          <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
+            🚨 {tAlerts('Title')}
+          </h3>
+          <p className="text-xs mb-4" style={{ color: 'hsl(215 15% 55%)' }}>
+            {tAlerts('Description')}
+          </p>
+
+          <form onSubmit={handleSaveAdminSettings} className="space-y-4">
+            <div>
+              <label className="block text-sm mb-1.5" style={{ color: 'hsl(215 15% 55%)' }}>
+                {tAlerts('AdminChatId')}
+              </label>
+              <input
+                type="text"
+                value={adminSetting.adminChatId || ''}
+                onChange={(e) => setAdminSetting((prev) => ({ ...prev, adminChatId: e.target.value }))}
+                placeholder="123456789 or @admin_channel"
+                className="form-input"
+              />
+              <p className="text-xs mt-1.5" style={{ color: 'hsl(215 15% 55%)' }}>
+                {tAlerts('AdminChatIdHelp')}
+              </p>
+            </div>
+
+            <div className="space-y-3 pt-2">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={adminSetting.notifyOnFailure}
+                  onChange={(e) => setAdminSetting((prev) => ({ ...prev, notifyOnFailure: e.target.checked }))}
+                  className="rounded border-gray-700 text-indigo-600 focus:ring-indigo-500 w-4 h-4 bg-black/40"
+                />
+                <div>
+                  <p className="text-sm font-medium text-gray-200">{tAlerts('NotifyOnFailure')}</p>
+                  <p className="text-xs text-gray-400">{tAlerts('NotifyOnFailureDesc')}</p>
+                </div>
+              </label>
+
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={adminSetting.notifyOnSuccess}
+                  onChange={(e) => setAdminSetting((prev) => ({ ...prev, notifyOnSuccess: e.target.checked }))}
+                  className="rounded border-gray-700 text-indigo-600 focus:ring-indigo-500 w-4 h-4 bg-black/40"
+                />
+                <div>
+                  <p className="text-sm font-medium text-gray-200">{tAlerts('NotifyOnSuccess')}</p>
+                  <p className="text-xs text-gray-400">{tAlerts('NotifyOnSuccessDesc')}</p>
+                </div>
+              </label>
+            </div>
+
+            {adminSettingStatus && (
+              <p className={`text-sm ${adminSettingStatus.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                {adminSettingStatus.message}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={isSavingAdminSetting}
+              className="px-6 py-2.5 rounded-xl font-medium text-white transition-all hover:scale-105 disabled:opacity-50"
+              style={{ background: 'hsl(250 85% 65%)' }}
+            >
+              {isSavingAdminSetting ? '⏳ ...' : tAlerts('SaveSettings')}
             </button>
           </form>
         </div>

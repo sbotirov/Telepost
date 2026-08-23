@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl'
 const navItems = [
   { href: '/dashboard', icon: '📊', label: 'Overview' },
   { href: '/dashboard/compose', icon: '✏️', label: 'Compose' },
+  { href: '/dashboard/analytics', icon: '📈', label: 'Analytics' },
   { href: '/dashboard/templates', icon: '📑', label: 'Templates' },
   { href: '/dashboard/channels', icon: '📢', label: 'Channels' },
   { href: '/dashboard/scheduled', icon: '⏰', label: 'Scheduled' },
@@ -43,6 +44,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
           
           let labelKey = 'Overview'
           if (item.href.includes('/compose')) labelKey = 'Compose'
+          else if (item.href.includes('/analytics')) labelKey = 'Analytics'
           else if (item.href.includes('/templates')) labelKey = 'Templates'
           else if (item.href.includes('/channels')) labelKey = 'Channels'
           else if (item.href.includes('/scheduled')) labelKey = 'Scheduled'

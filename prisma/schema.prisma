@@ -7,49 +7,54 @@ datasource db {
 }
 
 model Channel {
-  id          String        @id @default(cuid())
-  chatId      String        @unique
+  id          String                  @id @default(cuid())
+  chatId      String                  @unique
   title       String
   description String?
   username    String?
   memberCount Int?
   photoUrl    String?
-  isActive    Boolean       @default(true)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  isActive    Boolean                 @default(true)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
   posts       PostChannel[]
+  snapshots   ChannelGrowthSnapshot[]
 }
 
 model Post {
-  id                  String        @id @default(cuid())
-  type                String        @default("TEXT")
-  text                String?
-  parseMode           String        @default("HTML")
-  inlineKeyboard      String?
-  hashtags            String?
-  disableComments     Boolean       @default(false)
-  protectContent      Boolean       @default(false)
-  disableNotification Boolean       @default(false)
-  pinMessage          Boolean       @default(false)
-  status              String        @default("DRAFT")
-  scheduledAt         DateTime?
-  sentAt              DateTime?
-  telegramMsgIds      String?
-  errorMessage        String?
-  ttsText             String?
-  ttsLanguage         String?
-  ttsAudioPath        String?
-  autoDeleteHours     Int?
-  autoDeleteAt        DateTime?
-  isDeletedFromTelegram Boolean   @default(false)
-  isRecurring         Boolean       @default(false)
-  recurrenceRule      String?
-  recurrenceEndAt     DateTime?
-  createdAt           DateTime      @default(now())
-  updatedAt           DateTime      @updatedAt
-  channels            PostChannel[]
-  mediaFiles          MediaFile[]
-  poll                Poll?
+  id                    String        @id @default(cuid())
+  type                  String        @default("TEXT")
+  text                  String?
+  parseMode             String        @default("HTML")
+  inlineKeyboard        String?
+  hashtags              String?
+  disableComments       Boolean       @default(false)
+  protectContent        Boolean       @default(false)
+  disableNotification   Boolean       @default(false)
+  pinMessage            Boolean       @default(false)
+  status                String        @default("DRAFT")
+  scheduledAt           DateTime?
+  sentAt                DateTime?
+  telegramMsgIds        String?
+  errorMessage          String?
+  ttsText               String?
+  ttsLanguage           String?
+  ttsAudioPath          String?
+  autoDeleteHours       Int?
+  autoDeleteAt          DateTime?
+  isDeletedFromTelegram Boolean       @default(false)
+  isRecurring           Boolean       @default(false)
+  recurrenceRule        String?
+  recurrenceEndAt       DateTime?
+  viewsCount            Int           @default(0)
+  forwardsCount         Int           @default(0)
+  reactionsCount        Int           @default(0)
+  reactionsJson         String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  channels              PostChannel[]
+  mediaFiles            MediaFile[]
+  poll                  Poll?
 }
 
 model PostChannel {
@@ -112,6 +117,25 @@ model WatermarkSetting {
   fontSize  Int      @default(24)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model ChannelGrowthSnapshot {
+  id          String   @id @default(cuid())
+  channelId   String
+  memberCount Int
+  date        DateTime @default(now())
+  channel     Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, date])
+}
+
+model AdminSetting {
+  id               String   @id @default(cuid())
+  adminChatId      String?
+  notifyOnFailure  Boolean  @default(true)
+  notifyOnSuccess  Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model AuditLog {

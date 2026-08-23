@@ -156,3 +156,52 @@ export interface PaginatedResult<T> {
   totalPages: number
 }
 
+export interface AdminSettingConfig {
+  id?: string
+  adminChatId?: string | null
+  notifyOnFailure: boolean
+  notifyOnSuccess: boolean
+}
+
+export interface AnalyticsOverview {
+  totalViews: number
+  totalForwards: number
+  totalReactions: number
+  totalPostsSent: number
+  avgViewsPerPost: number
+  avgEngagementRate: number
+  totalSubscribers: number
+}
+
+export interface ViewsTimelinePoint {
+  date: string
+  views: number
+  forwards: number
+  reactions: number
+  postsCount: number
+}
+
+export interface ChannelGrowthPoint {
+  date: string
+  memberCount: number
+}
+
+export interface ChannelGrowthSeries {
+  channelId: string
+  title: string
+  currentMembers: number
+  history: ChannelGrowthPoint[]
+}
+
+export interface TopPostItem {
+  id: string
+  type: PostType
+  text?: string | null
+  viewsCount: number
+  forwardsCount: number
+  reactionsCount: number
+  reactionsJson?: string | null
+  sentAt?: Date | string | null
+  channels: Array<{ channelId: string; title: string }>
+}
+

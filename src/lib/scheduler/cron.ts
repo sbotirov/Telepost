@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/db/prisma'
 import { sendPostToChannels, deleteTelegramMessage } from '@/lib/telegram/sender'
+import { sendAdminFailureAlert, sendAdminSuccessAlert } from '@/lib/telegram/alerts'
 import { logger } from '@/lib/security/logger'
 import type { RecurrenceRule } from '@/types'
 
@@ -130,7 +131,7 @@ export async function processScheduledPosts() {
 
         const errors = Array.from(results.entries())
           .filter(([, r]) => !r.success)
-          .map(([chatId, r]) => ({ chatId, error: r.error }))
+          .map(([chatId, r]) => ({ chatId, error: r.error || 'Unknown error' }))
 
         // Calculate auto-delete date if configured
         let autoDeleteAt: Date | null = null
@@ -148,6 +149,20 @@ export async function processScheduledPosts() {
             errorMessage: errors.length > 0 ? JSON.stringify(errors) : null,
           },
         })
+
+        // Trigger admin alerts for scheduled post
+        const channelTitles = post.channels.map((pc) => pc.channel.title)
+        if (!allSuccess || errors.length > 0) {
+          sendAdminFailureAlert({
+            postId: post.id,
+            type: post.type,
+            text: post.text,
+            channelTitles,
+            errors,
+          }).catch(() => {})
+        } else {
+          sendAdminSuccessAlert(post.id, post.type, channelTitles).catch(() => {})
+        }
 
         logger.info(`Scheduled post ${post.id} processed`, {
           success: allSuccess,
@@ -225,6 +240,13 @@ export async function processScheduledPosts() {
           where: { id: post.id },
           data: { status: 'FAILED', errorMessage: errMsg },
         })
+        sendAdminFailureAlert({
+          postId: post.id,
+          type: post.type,
+          text: post.text,
+          channelTitles: post.channels.map((pc) => pc.channel.title),
+          errors: [{ error: errMsg }],
+        }).catch(() => {})
         logger.error(`Failed to process scheduled post ${post.id}`, { error: errMsg })
       }
     }
