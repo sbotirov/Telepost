@@ -1,10 +1,13 @@
 import { prisma } from '@/lib/db/prisma'
 import { sendPostToChannels, deleteTelegramMessage } from '@/lib/telegram/sender'
 import { sendAdminFailureAlert, sendAdminSuccessAlert } from '@/lib/telegram/alerts'
+import { syncChannelAudienceDiff, sendDailyAnalyticsDigest } from '@/lib/telegram/ownerReport'
 import { logger } from '@/lib/security/logger'
 import type { RecurrenceRule } from '@/types'
 
 let schedulerInterval: ReturnType<typeof setInterval> | null = null
+let lastAudienceSyncTime = 0
+let lastDailyDigestDay = -1
 
 function calculateNextRun(currentDate: Date, rule: RecurrenceRule): Date {
   const next = new Date(currentDate)
@@ -256,10 +259,28 @@ export async function processScheduledPosts() {
 }
 
 export async function runAllCronTasks() {
-  await Promise.all([
+  const now = new Date()
+  const currentDay = now.getDate()
+  const currentHour = now.getHours()
+
+  const tasks: Promise<unknown>[] = [
     processScheduledPosts(),
     processAutoDeletePosts(),
-  ])
+  ]
+
+  // Periodic audience diff sync (every 30 minutes)
+  if (Date.now() - lastAudienceSyncTime > 30 * 60 * 1000) {
+    lastAudienceSyncTime = Date.now()
+    tasks.push(syncChannelAudienceDiff().catch((err) => logger.warn('Audience sync error', { error: err.message })))
+  }
+
+  // Daily performance digest (once a day in morning >= 09:00)
+  if (currentHour >= 9 && lastDailyDigestDay !== currentDay) {
+    lastDailyDigestDay = currentDay
+    tasks.push(sendDailyAnalyticsDigest().catch((err) => logger.warn('Daily digest error', { error: err.message })))
+  }
+
+  await Promise.all(tasks)
 }
 
 export function startScheduler() {

@@ -4,6 +4,7 @@ import { useState, useEffect, useTransition } from 'react'
 import { updatePassword } from '@/app/actions/settings'
 import { getWatermarkSetting, updateWatermarkSetting } from '@/app/actions/watermark'
 import { getAdminSettings, updateAdminSettings } from '@/app/actions/analytics'
+import BotSetupGuide from '@/components/settings/BotSetupGuide'
 import { useTranslations } from 'next-intl'
 import type { WatermarkConfig, WatermarkPosition, AdminSettingConfig } from '@/types'
 
@@ -274,8 +275,8 @@ export default function SettingsPage() {
         </div>
 
         {/* Bot Configuration */}
-        <div className="glass rounded-2xl p-6">
-          <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">{t('BotConfig')}</h3>
+        <div className="glass rounded-2xl p-6 space-y-4">
+          <h3 className="text-lg font-semibold flex items-center gap-2">{t('BotConfig')}</h3>
           <div className="space-y-4">
             <div>
               <label className="block text-sm mb-1.5" style={{ color: 'hsl(215 15% 55%)' }}>{t('BotToken')}</label>
@@ -298,6 +299,9 @@ export default function SettingsPage() {
                 {t('BotTokenHelp')}
               </p>
             </div>
+
+            {/* Step-by-Step Bot Setup Guide */}
+            <BotSetupGuide />
           </div>
         </div>
 

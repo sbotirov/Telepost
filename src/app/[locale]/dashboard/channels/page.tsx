@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useTransition } from 'react'
+import { useState, useEffect, useRef, useTransition } from 'react'
 import { getAllChannels, addChannel, removeChannel, toggleChannel } from '@/app/actions/channels'
+import ChannelHelpGuide from '@/components/channels/ChannelHelpGuide'
 import type { ChannelInfo } from '@/types'
 import { useTranslations } from 'next-intl'
 
@@ -11,18 +12,26 @@ export default function ChannelsPage() {
   const [chatId, setChatId] = useState('')
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
   const t = useTranslations('Channels')
 
   useEffect(() => {
     loadChannels()
   }, [])
 
+  useEffect(() => {
+    if (showAddForm) {
+      inputRef.current?.focus()
+    }
+  }, [showAddForm])
+
   async function loadChannels() {
     const data = await getAllChannels()
     setChannels(data as unknown as ChannelInfo[])
   }
 
-  function handleAdd() {
+  function handleAdd(e?: React.FormEvent) {
+    if (e) e.preventDefault()
     if (!chatId.trim()) return
     setError('')
     startTransition(async () => {
@@ -71,25 +80,44 @@ export default function ChannelsPage() {
 
       {/* Add Channel Form */}
       {showAddForm && (
-        <div className="glass rounded-2xl p-5 animate-fade-in">
-          <h3 className="text-sm font-semibold mb-3">{t('AddChannel')}</h3>
-          <div className="flex gap-3">
-            <input
-              value={chatId}
-              onChange={(e) => setChatId(e.target.value)}
-              placeholder={t('Placeholder')}
-              className="flex-1"
-            />
+        <div className="glass rounded-2xl p-5 space-y-4 animate-fade-in border border-indigo-500/20 shadow-xl">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              📢 {t('AddChannel')}
+            </h3>
             <button
-              onClick={handleAdd}
-              disabled={isPending || !chatId.trim()}
-              className="px-5 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50"
-              style={{ background: 'hsl(250 85% 65%)' }}
+              type="button"
+              onClick={() => setShowAddForm(false)}
+              className="text-xs text-gray-400 hover:text-white p-1"
             >
-              {isPending ? '...' : t('Add')}
+              ✕
             </button>
           </div>
-          {error && <p className="text-sm mt-2" style={{ color: 'hsl(0 72% 60%)' }}>⚠️ {error}</p>}
+
+          <form onSubmit={handleAdd} className="space-y-3">
+            <div className="flex gap-3">
+              <input
+                ref={inputRef}
+                autoFocus
+                value={chatId}
+                onChange={(e) => setChatId(e.target.value)}
+                placeholder={t('Placeholder')}
+                className="flex-1 form-input text-sm"
+              />
+              <button
+                type="submit"
+                disabled={isPending || !chatId.trim()}
+                className="px-5 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50 transition-all hover:scale-105"
+                style={{ background: 'hsl(250 85% 65%)' }}
+              >
+                {isPending ? '⏳ ...' : t('Add')}
+              </button>
+            </div>
+            {error && <p className="text-sm" style={{ color: 'hsl(0 72% 60%)' }}>⚠️ {error}</p>}
+          </form>
+
+          {/* Interactive Visual Guide */}
+          <ChannelHelpGuide />
         </div>
       )}
 

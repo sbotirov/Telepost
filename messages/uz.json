@@ -24,7 +24,18 @@
     "NoChannelsDesc": "Boshlash uchun birinchi Telegram kanalingizni qo'shing",
     "Members": "a'zolar",
     "ConfirmRemove": "{title} o'chirilsinmi?",
-    "FailedToAdd": "Kanalni qo'shib bo'lmadi"
+    "FailedToAdd": "Kanalni qo'shib bo'lmadi",
+    "HelpTitle": "Kanal ID yoki Username ni qayerdan olish mumkin?",
+    "HelpAdminRequiredTitle": "Botni kanalga Admin qilish shart!",
+    "HelpAdminRequiredDesc": "Kanal sozlamalariga kirib, botingizni Administrator qilib qo'shing va unga 'Xabarlarni joylash (Post messages)' huquqini bering.",
+    "HelpPublicTitle": "Ommaviy (Public) Kanallar",
+    "HelpPublicDesc": "Kanal havolasi yoki @username orqali qo'shishingiz mumkin:",
+    "HelpPrivateTitle": "Yopiq (Private) Kanallar",
+    "HelpPrivateDesc": "-100 bilan boshlanuvchi raqamli Kanal ID si orqali qo'shiladi:",
+    "HelpHowToGetIdTitle": "Yopiq kanal ID sini qanday bilish mumkin?",
+    "HelpHowToGetIdStep1": "Kanalga yangi botingizni Admin qilib qo'shing",
+    "HelpHowToGetIdStep2": "Kanaldan istalgan xabarni @userinfobot yoki @JsonDumpBot ga yo'naltiring (Forward)",
+    "HelpHowToGetIdStep3": "Bot bergan javobdan -100 bilan boshlanuvchi ID raqamini nusxalab oling"
   },
   "History": {
     "Title": "Xabarlar tarixi",
@@ -194,7 +205,18 @@
     "Storage": "Xotira",
     "Local": "Mahalliy (uploads/)",
     "PasswordUpdated": "Parol muvaffaqiyatli yangilandi!",
-    "FailedToUpdate": "Yangilashda xatolik yuz berdi"
+    "FailedToUpdate": "Yangilashda xatolik yuz berdi",
+    "BotGuideTitle": "Yangi Telegram Bot yaratish va ulash qo'llanmasi",
+    "BotGuideIntro": "O'zingizning shaxsiy Telegram botingizni yaratish va ushbu tizimga ulash uchun quyidagi 4 ta oson qadamni bajaring:",
+    "BotGuideStep1Title": "BotFather orqali yangi bot yaratish",
+    "BotGuideStep1Desc": "Telegram'da @BotFather ga kiring va yangi bot ochish uchun buyruq yuboring:",
+    "BotGuideStep2Title": "Bot nomi va username'ini belgilang",
+    "BotGuideStep2Desc": "Botingiz uchun istalgan nom va oxiri 'bot' bilan tugaydigan username kiriting:",
+    "BotGuideStep3Title": "API Tokenni oling va .env fayliga kiriting",
+    "BotGuideStep3Desc": "BotFather sizga bergan uzun API Tokenni nusxalang va loyihaning .env fayliga BOT_TOKEN=... qilib saqlang:",
+    "BotGuideStep4Title": "Botni kanalingizga Administrator qiling",
+    "BotGuideStep4Desc": "Kanal sozlamalariga kiring, 'Administrators' bo'limidan yangi yaratgan botingizni qidiring va 'Post messages' ruxsati bilan Admin qiling.",
+    "BotGuideTip": "Eslatma: Bot faqat o'zi Administrator qilib tayinlangan kanallargagina xabar yuborish huquqiga ega bo'ladi."
   },
   "Compose": {
     "Title": "Xabar yaratish",
