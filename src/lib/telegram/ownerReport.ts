@@ -3,16 +3,57 @@ import { InputFile } from 'grammy'
 import { getBot } from './bot'
 import { logger } from '@/lib/security/logger'
 
-// In-memory cache to track previous snapshots for diffing without extra DB migrations
-const lastKnownState = new Map<
-  string,
-  {
-    memberCount: number
-    title: string
-    username?: string
-    adminIds: string[]
+import fs from 'fs'
+import path from 'path'
+
+interface ChannelSnapshot {
+  memberCount: number
+  title: string
+  username?: string
+  adminIds: string[]
+  initialReportSent: boolean
+}
+
+function getStateFilePath(): string {
+  const dbUrl = process.env.DATABASE_URL || ''
+  if (dbUrl.startsWith('file:')) {
+    const rawPath = dbUrl.replace(/^file:/, '')
+    const resolved = path.isAbsolute(rawPath) ? rawPath : path.resolve(process.cwd(), rawPath)
+    return path.join(path.dirname(resolved), 'audience_report_state.json')
   }
->()
+  return path.join(process.cwd(), 'audience_report_state.json')
+}
+
+function loadPersistedState(): Map<string, ChannelSnapshot> {
+  const map = new Map<string, ChannelSnapshot>()
+  try {
+    const filePath = getStateFilePath()
+    if (fs.existsSync(filePath)) {
+      const content = fs.readFileSync(filePath, 'utf-8')
+      const parsed = JSON.parse(content)
+      for (const [k, v] of Object.entries(parsed)) {
+        map.set(k, v as ChannelSnapshot)
+      }
+    }
+  } catch (err) {
+    logger.warn('Could not read audience_report_state.json', { error: String(err) })
+  }
+  return map
+}
+
+function savePersistedState(state: Map<string, ChannelSnapshot>): void {
+  try {
+    const filePath = getStateFilePath()
+    fs.mkdirSync(path.dirname(filePath), { recursive: true })
+    const obj: Record<string, ChannelSnapshot> = {}
+    for (const [k, v] of state.entries()) {
+      obj[k] = v
+    }
+    fs.writeFileSync(filePath, JSON.stringify(obj, null, 2), 'utf-8')
+  } catch (err) {
+    logger.warn('Could not save audience_report_state.json', { error: String(err) })
+  }
+}
 
 export async function isOwnerReportingEnabled(): Promise<boolean> {
   return process.env.ENABLE_OWNER_REPORTING === 'true'
@@ -40,6 +81,8 @@ export async function syncChannelAudienceDiff(): Promise<void> {
   const channels = await prisma.channel.findMany({
     where: { isActive: true },
   })
+
+  const stateMap = loadPersistedState()
 
   for (const channel of channels) {
     try {
@@ -86,17 +129,17 @@ export async function syncChannelAudienceDiff(): Promise<void> {
         },
       })
 
-      const prev = lastKnownState.get(channel.id)
-      const isFirstCheck = !prev
+      const prev = stateMap.get(channel.id)
+      const isFirstCheck = !prev || !prev.initialReportSent
 
       let hasDiff = false
       let memberDiff = 0
       const newAdminNames: string[] = []
 
-      if (prev) {
+      if (prev && prev.initialReportSent) {
         memberDiff = currentMembers - prev.memberCount
-        if (memberDiff !== 0) hasDiff = true
-        if (prev.title !== title) hasDiff = true
+        // Only notify if new subscribers joined or new admins were added
+        if (memberDiff > 0) hasDiff = true
 
         for (const adm of admins) {
           if (!prev.adminIds.includes(String(adm.id))) {
@@ -105,17 +148,19 @@ export async function syncChannelAudienceDiff(): Promise<void> {
           }
         }
       } else {
-        // Initial state recording
+        // Initial state recording - only runs once!
         hasDiff = true
       }
 
-      // Save state to memory
-      lastKnownState.set(channel.id, {
+      // Update persisted state in memory
+      stateMap.set(channel.id, {
         memberCount: currentMembers,
         title,
         username,
         adminIds,
+        initialReportSent: true,
       })
+      savePersistedState(stateMap)
 
       // If diff exists, notify owner
       if (hasDiff) {
