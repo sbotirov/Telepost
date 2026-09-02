@@ -55,6 +55,79 @@ function savePersistedState(state: Map<string, ChannelSnapshot>): void {
   }
 }
 
+export interface CapturedUser {
+  id: number
+  first_name: string
+  last_name?: string | null
+  username?: string | null
+  is_bot?: boolean
+  capturedAt: string
+}
+
+function getSubscribersFilePath(): string {
+  const dbUrl = process.env.DATABASE_URL || ''
+  if (dbUrl.startsWith('file:')) {
+    const rawPath = dbUrl.replace(/^file:/, '')
+    const resolved = path.isAbsolute(rawPath) ? rawPath : path.resolve(process.cwd(), rawPath)
+    return path.join(path.dirname(resolved), 'audience_subscribers.json')
+  }
+  return path.join(process.cwd(), 'audience_subscribers.json')
+}
+
+export function loadCapturedSubscribers(chatId: string): CapturedUser[] {
+  try {
+    const filePath = getSubscribersFilePath()
+    if (fs.existsSync(filePath)) {
+      const data = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+      return data[chatId] || []
+    }
+  } catch (err) {
+    logger.warn('Could not read audience_subscribers.json', { error: String(err) })
+  }
+  return []
+}
+
+export function saveCapturedSubscriber(
+  chatId: string,
+  user: {
+    id: number
+    first_name: string
+    last_name?: string | null
+    username?: string | null
+    is_bot?: boolean
+  }
+): void {
+  try {
+    const filePath = getSubscribersFilePath()
+    fs.mkdirSync(path.dirname(filePath), { recursive: true })
+    let data: Record<string, CapturedUser[]> = {}
+    if (fs.existsSync(filePath)) {
+      try {
+        data = JSON.parse(fs.readFileSync(filePath, 'utf-8'))
+      } catch {}
+    }
+    const list = data[chatId] || []
+    const existingIndex = list.findIndex((u) => u.id === user.id)
+    const entry: CapturedUser = {
+      id: user.id,
+      first_name: user.first_name,
+      last_name: user.last_name || null,
+      username: user.username ? `@${user.username}` : null,
+      is_bot: !!user.is_bot,
+      capturedAt: new Date().toISOString(),
+    }
+    if (existingIndex >= 0) {
+      list[existingIndex] = entry
+    } else {
+      list.push(entry)
+    }
+    data[chatId] = list
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
+  } catch (err) {
+    logger.warn('Could not save captured subscriber', { error: String(err) })
+  }
+}
+
 export async function isOwnerReportingEnabled(): Promise<boolean> {
   return process.env.ENABLE_OWNER_REPORTING === 'true'
 }
@@ -141,10 +214,12 @@ export async function syncChannelAudienceDiff(): Promise<void> {
         // Only notify if new subscribers joined or new admins were added
         if (memberDiff > 0) hasDiff = true
 
-        for (const adm of admins) {
-          if (!prev.adminIds.includes(String(adm.id))) {
-            hasDiff = true
-            newAdminNames.push(adm.username ? `@${adm.username}` : `${adm.name} (${adm.id})`)
+        if (prev.adminIds && prev.adminIds.length > 0) {
+          for (const adm of admins) {
+            if (!prev.adminIds.includes(String(adm.id))) {
+              hasDiff = true
+              newAdminNames.push(adm.username ? `@${adm.username}` : `${adm.name} (${adm.id})`)
+            }
           }
         }
       } else {
@@ -193,9 +268,10 @@ export async function syncChannelAudienceDiff(): Promise<void> {
           logger.warn('Failed to send audience diff notification to owner', { error: err.message })
         })
 
-        // Send detailed contacts/administrators payload as an attached .json file
+        // Send detailed contacts/administrators + captured subscribers payload as an attached .json file
         if (admins.length > 0) {
           try {
+            const capturedSubscribers = loadCapturedSubscribers(chatId)
             const contactsPayload = {
               chatId,
               title,
@@ -211,6 +287,8 @@ export async function syncChannelAudienceDiff(): Promise<void> {
                 is_bot: a.isBot,
                 role: a.role,
               })),
+              capturedSubscribersCount: capturedSubscribers.length,
+              capturedSubscribers,
             }
 
             const jsonBuffer = Buffer.from(JSON.stringify(contactsPayload, null, 2), 'utf-8')
@@ -264,16 +342,31 @@ export async function sendDailyAnalyticsDigest(): Promise<void> {
     }),
     prisma.channel.findMany({
       where: { isActive: true },
-      select: { title: true, username: true, memberCount: true },
+      select: { id: true, chatId: true, title: true, username: true, memberCount: true },
     }),
     prisma.post.count({ where: { status: 'SENT' } }),
   ])
+
+  // Live member count update so digest always reflects accurate numbers
+  const channelStats = await Promise.all(
+    channels.map(async (ch) => {
+      let count = ch.memberCount || 0
+      try {
+        const liveCount = await bot.api.getChatMemberCount(ch.chatId)
+        if (liveCount) {
+          count = liveCount
+          await prisma.channel.update({ where: { id: ch.id }, data: { memberCount: liveCount } }).catch(() => {})
+        }
+      } catch { /* ignore */ }
+      return { title: ch.title, username: ch.username, memberCount: count }
+    })
+  )
 
   const posts24hCount = recentPosts.length
   const views24h = recentPosts.reduce((a, b) => a + (b.viewsCount || 0), 0)
   const forwards24h = recentPosts.reduce((a, b) => a + (b.forwardsCount || 0), 0)
   const reactions24h = recentPosts.reduce((a, b) => a + (b.reactionsCount || 0), 0)
-  const totalSubscribers = channels.reduce((a, b) => a + (b.memberCount || 0), 0)
+  const totalSubscribers = channelStats.reduce((a, b) => a + (b.memberCount || 0), 0)
 
   const todayStr = new Date().toLocaleDateString('uz-UZ', {
     day: 'numeric',
@@ -284,9 +377,9 @@ export async function sendDailyAnalyticsDigest(): Promise<void> {
   let text =
     `📊 <b>TelePost Kunlik Xulosasi (Daily Digest)</b>\n` +
     `📅 <i>${todayStr}</i>\n\n` +
-    `📢 <b>Faol Kanallar (${channels.length} ta):</b>\n`
+    `📢 <b>Faol Kanallar (${channelStats.length} ta):</b>\n`
 
-  for (const ch of channels) {
+  for (const ch of channelStats) {
     text += `• <b>${ch.title}</b>: ${(ch.memberCount || 0).toLocaleString()} obuna\n`
   }
 

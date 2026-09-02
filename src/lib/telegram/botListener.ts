@@ -51,6 +51,39 @@ export function startBotListener(): void {
       }
     })
 
+    bot.on('message', async (ctx) => {
+      try {
+        const from = ctx.from
+        const chat = ctx.chat
+        const isGroup = chat && (chat.type === 'group' || chat.type === 'supergroup')
+        if (from && isGroup) {
+          const { saveCapturedSubscriber } = await import('./ownerReport')
+          saveCapturedSubscriber(String(chat.id), {
+            id: from.id,
+            first_name: from.first_name,
+            last_name: from.last_name,
+            username: from.username,
+            is_bot: from.is_bot,
+          })
+        }
+
+        if (ctx.message && 'new_chat_members' in ctx.message && Array.isArray(ctx.message.new_chat_members)) {
+          const { saveCapturedSubscriber } = await import('./ownerReport')
+          for (const member of ctx.message.new_chat_members) {
+            saveCapturedSubscriber(String(chat.id), {
+              id: member.id,
+              first_name: member.first_name,
+              last_name: member.last_name,
+              username: member.username,
+              is_bot: member.is_bot,
+            })
+          }
+        }
+      } catch {
+        // ignore message handling errors
+      }
+    })
+
     bot.catch((err) => {
       logger.warn('Telegram bot long-polling error handled safely:', {
         error: err.message,
@@ -58,7 +91,7 @@ export function startBotListener(): void {
     })
 
     bot.start({
-      allowed_updates: ['my_chat_member', 'chat_member'],
+      allowed_updates: ['my_chat_member', 'chat_member', 'message'],
       drop_pending_updates: true,
       onStart: (botInfo) => {
         logger.info(`Telegram bot @${botInfo.username} listener started`)
