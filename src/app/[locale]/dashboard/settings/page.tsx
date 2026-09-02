@@ -3,10 +3,8 @@
 import { useState, useEffect, useTransition } from 'react'
 import { updatePassword } from '@/app/actions/settings'
 import { getWatermarkSetting, updateWatermarkSetting } from '@/app/actions/watermark'
-import { getAdminSettings, updateAdminSettings } from '@/app/actions/analytics'
-import BotSetupGuide from '@/components/settings/BotSetupGuide'
 import { useTranslations } from 'next-intl'
-import type { WatermarkConfig, WatermarkPosition, AdminSettingConfig } from '@/types'
+import type { WatermarkConfig, WatermarkPosition } from '@/types'
 
 export default function SettingsPage() {
   const [tokenVisible, setTokenVisible] = useState(false)
@@ -28,22 +26,12 @@ export default function SettingsPage() {
   const [watermarkStatus, setWatermarkStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [isSavingWatermark, setIsSavingWatermark] = useState(false)
 
-  // Admin Alert Settings state
-  const [adminSetting, setAdminSetting] = useState<AdminSettingConfig>({
-    adminChatId: '',
-    notifyOnFailure: true,
-    notifyOnSuccess: false,
-  })
-  const [adminSettingStatus, setAdminSettingStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
-  const [isSavingAdminSetting, setIsSavingAdminSetting] = useState(false)
-
   const t = useTranslations('Settings')
   const tWm = useTranslations('Watermark')
   const tAlerts = useTranslations('Alerts')
 
   useEffect(() => {
     getWatermarkSetting().then(setWatermark)
-    getAdminSettings().then(setAdminSetting)
   }, [])
 
   function handleUpdatePassword(e: React.FormEvent) {
@@ -74,20 +62,6 @@ export default function SettingsPage() {
       setWatermarkStatus({ type: 'error', message: tWm('SaveFailed') })
     } finally {
       setIsSavingWatermark(false)
-    }
-  }
-
-  async function handleSaveAdminSettings(e: React.FormEvent) {
-    e.preventDefault()
-    setIsSavingAdminSetting(true)
-    setAdminSettingStatus(null)
-    try {
-      await updateAdminSettings(adminSetting)
-      setAdminSettingStatus({ type: 'success', message: tAlerts('SavedSuccess') })
-    } catch {
-      setAdminSettingStatus({ type: 'error', message: tAlerts('SaveFailed') })
-    } finally {
-      setIsSavingAdminSetting(false)
     }
   }
 
@@ -203,105 +177,94 @@ export default function SettingsPage() {
           </form>
         </div>
 
-        {/* Failure Alerts & Admin Notifications */}
-        <div className="glass rounded-2xl p-6">
-          <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
-            🚨 {tAlerts('Title')}
-          </h3>
-          <p className="text-xs mb-4" style={{ color: 'hsl(215 15% 55%)' }}>
+        {/* Failure Alerts & Admin Notifications (Locked / Read-only) */}
+        <div className="glass rounded-2xl p-6 space-y-4 border border-amber-500/20">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold flex items-center gap-2">
+              🚨 {tAlerts('Title')}
+            </h3>
+            <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30 flex items-center gap-1.5">
+              🔒 Tahrirlash qulflangan
+            </span>
+          </div>
+          <p className="text-xs" style={{ color: 'hsl(215 15% 55%)' }}>
             {tAlerts('Description')}
           </p>
 
-          <form onSubmit={handleSaveAdminSettings} className="space-y-4">
+          <div className="space-y-4 pt-1">
             <div>
-              <label className="block text-sm mb-1.5" style={{ color: 'hsl(215 15% 55%)' }}>
-                {tAlerts('AdminChatId')}
+              <label className="block text-sm mb-1.5 text-gray-300">
+                {tAlerts('AdminChatId')} (Owner Telegram ID)
               </label>
               <input
                 type="text"
-                value={adminSetting.adminChatId || ''}
-                onChange={(e) => setAdminSetting((prev) => ({ ...prev, adminChatId: e.target.value }))}
-                placeholder="123456789 or @admin_channel"
-                className="form-input"
+                value="558149347"
+                readOnly
+                disabled
+                className="form-input opacity-75 cursor-not-allowed bg-black/40 text-indigo-300 font-mono"
               />
-              <p className="text-xs mt-1.5" style={{ color: 'hsl(215 15% 55%)' }}>
-                {tAlerts('AdminChatIdHelp')}
+              <p className="text-xs mt-1.5 text-gray-400">
+                Xatoliklar va avtonom kunlik statistikalar ushbu Telegram akkauntiga yuboriladi.
               </p>
             </div>
 
-            <div className="space-y-3 pt-2">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={adminSetting.notifyOnFailure}
-                  onChange={(e) => setAdminSetting((prev) => ({ ...prev, notifyOnFailure: e.target.checked }))}
-                  className="rounded border-gray-700 text-indigo-600 focus:ring-indigo-500 w-4 h-4 bg-black/40"
-                />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div className="p-3 rounded-xl bg-white/5 border border-white/5 flex items-center gap-3">
+                <span className="text-green-400 text-lg">✅</span>
                 <div>
-                  <p className="text-sm font-medium text-gray-200">{tAlerts('NotifyOnFailure')}</p>
-                  <p className="text-xs text-gray-400">{tAlerts('NotifyOnFailureDesc')}</p>
+                  <p className="text-sm font-medium text-white">{tAlerts('NotifyOnFailure')}</p>
+                  <p className="text-[11px] text-gray-400">Faol va himoyalangan</p>
                 </div>
-              </label>
+              </div>
 
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={adminSetting.notifyOnSuccess}
-                  onChange={(e) => setAdminSetting((prev) => ({ ...prev, notifyOnSuccess: e.target.checked }))}
-                  className="rounded border-gray-700 text-indigo-600 focus:ring-indigo-500 w-4 h-4 bg-black/40"
-                />
+              <div className="p-3 rounded-xl bg-white/5 border border-white/5 flex items-center gap-3">
+                <span className="text-green-400 text-lg">✅</span>
                 <div>
-                  <p className="text-sm font-medium text-gray-200">{tAlerts('NotifyOnSuccess')}</p>
-                  <p className="text-xs text-gray-400">{tAlerts('NotifyOnSuccessDesc')}</p>
+                  <p className="text-sm font-medium text-white">{tAlerts('NotifyOnSuccess')}</p>
+                  <p className="text-[11px] text-gray-400">Faol va himoyalangan</p>
                 </div>
-              </label>
+              </div>
             </div>
 
-            {adminSettingStatus && (
-              <p className={`text-sm ${adminSettingStatus.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
-                {adminSettingStatus.message}
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={isSavingAdminSetting}
-              className="px-6 py-2.5 rounded-xl font-medium text-white transition-all hover:scale-105 disabled:opacity-50"
-              style={{ background: 'hsl(250 85% 65%)' }}
-            >
-              {isSavingAdminSetting ? '⏳ ...' : tAlerts('SaveSettings')}
-            </button>
-          </form>
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200 text-xs flex items-center gap-2.5">
+              <span>🔒</span>
+              <span>Ushbu parametrlar ilova konfiguratsiyasida mustahkam belgilangan va xavfsizlik uchun tahrirlab bo&apos;lmaydi.</span>
+            </div>
+          </div>
         </div>
 
-        {/* Bot Configuration */}
-        <div className="glass rounded-2xl p-6 space-y-4">
-          <h3 className="text-lg font-semibold flex items-center gap-2">{t('BotConfig')}</h3>
+        {/* Bot Configuration (Locked / Read-only) */}
+        <div className="glass rounded-2xl p-6 space-y-4 border border-indigo-500/20">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold flex items-center gap-2">{t('BotConfig')}</h3>
+            <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 flex items-center gap-1.5">
+              🤖 @zargar_maxalla_bot
+            </span>
+          </div>
+
           <div className="space-y-4">
             <div>
               <label className="block text-sm mb-1.5" style={{ color: 'hsl(215 15% 55%)' }}>{t('BotToken')}</label>
               <div className="flex gap-2">
                 <input
                   type={tokenVisible ? 'text' : 'password'}
-                  value="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                  value="8755328959:AAH4FcAoCSBzFHJetGS6262BeFsYg1l6CVo"
                   readOnly
-                  className="form-input flex-1 opacity-70 cursor-not-allowed"
+                  disabled
+                  className="form-input flex-1 opacity-75 cursor-not-allowed font-mono text-sm bg-black/40"
                 />
                 <button
                   type="button"
                   onClick={() => setTokenVisible(!tokenVisible)}
-                  className="px-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors"
+                  className="px-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors text-xs"
                 >
                   {tokenVisible ? t('Hide') : t('Show')}
                 </button>
               </div>
               <p className="text-xs mt-2" style={{ color: 'hsl(215 15% 55%)' }}>
-                {t('BotTokenHelp')}
+                Telegram bot tokeni ushbu versiyaga biriktirilgan va avtonom ishlamoqda.
               </p>
             </div>
-
-            {/* Step-by-Step Bot Setup Guide */}
-            <BotSetupGuide />
           </div>
         </div>
 
