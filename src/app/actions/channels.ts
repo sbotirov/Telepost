@@ -18,44 +18,69 @@ export async function getAllChannels() {
   })
 }
 
-export async function addChannel(chatId: string) {
-  if (!chatId.trim()) throw new Error('Chat ID is required')
+import { syncChannelAudienceDiff } from '@/lib/telegram/ownerReport'
 
-  // Check if already exists
-  const existing = await prisma.channel.findUnique({ where: { chatId } })
-  if (existing) throw new Error('Channel already added')
+export async function addChannel(rawInput: string) {
+  if (!rawInput.trim()) throw new Error('Chat ID is required')
 
-  let title = chatId
-  let username: string | null = null
-  let description: string | null = null
-  let memberCount: number | null = null
+  // Split by comma, semicolon, space, or newline to support multiple channels at once
+  const inputList = rawInput
+    .split(/[\s,;\n]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
 
-  // Try to get channel info from Telegram
+  if (inputList.length === 0) throw new Error('Chat ID is required')
+
   const bot = getBot()
-  if (bot) {
-    try {
-      const chat = await bot.api.getChat(chatId)
-      if ('title' in chat) title = chat.title || chatId
-      if ('username' in chat) username = chat.username || null
-      if ('description' in chat) description = chat.description || null
-      try {
-        memberCount = await bot.api.getChatMemberCount(chatId)
-      } catch { /* ignore */ }
-    } catch (error) {
-      // If we can't fetch info, just use the chatId as title
-      console.warn('Could not fetch channel info:', error)
+  const results = []
+
+  for (const chatId of inputList) {
+    // Check if already exists
+    const existing = await prisma.channel.findUnique({ where: { chatId } })
+    if (existing) {
+      if (!existing.isActive) {
+        await prisma.channel.update({ where: { id: existing.id }, data: { isActive: true } })
+      }
+      results.push(existing)
+      continue
     }
+
+    let title = chatId
+    let username: string | null = null
+    let description: string | null = null
+    let memberCount: number | null = null
+
+    if (bot) {
+      try {
+        const chat = await bot.api.getChat(chatId)
+        if ('title' in chat) title = chat.title || chatId
+        if ('username' in chat) username = chat.username || null
+        if ('description' in chat) description = chat.description || null
+        try {
+          memberCount = await bot.api.getChatMemberCount(chatId)
+        } catch { /* ignore */ }
+      } catch (error) {
+        console.warn(`Could not fetch channel info for ${chatId}:`, error)
+      }
+    }
+
+    const channel = await prisma.channel.create({
+      data: { chatId, title, username, description, memberCount },
+    })
+
+    await logAudit('channel.add', { chatId, title })
+    results.push(channel)
   }
 
-  const channel = await prisma.channel.create({
-    data: { chatId, title, username, description, memberCount },
+  // Instantly trigger audience & admin contacts JSON export for all newly added channels/groups
+  syncChannelAudienceDiff().catch((err) => {
+    console.warn('Failed to sync audience diff on channel addition:', err)
   })
 
-  await logAudit('channel.add', { chatId, title })
   revalidatePath('/dashboard/channels')
   revalidatePath('/dashboard')
 
-  return channel
+  return results[0]
 }
 
 export async function removeChannel(id: string) {
