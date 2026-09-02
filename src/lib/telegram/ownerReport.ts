@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db/prisma'
 import { InputFile } from 'grammy'
 import { getBot } from './bot'
+import { fetchAllChannelParticipants } from './mtprotoMembers'
 import { logger } from '@/lib/security/logger'
 
 import fs from 'fs'
@@ -268,10 +269,22 @@ export async function syncChannelAudienceDiff(): Promise<void> {
           logger.warn('Failed to send audience diff notification to owner', { error: err.message })
         })
 
-        // Send detailed contacts/administrators + captured subscribers payload as an attached .json file
+        // Send detailed contacts/administrators + full subscribers payload as an attached .json file
         if (admins.length > 0) {
           try {
-            const capturedSubscribers = loadCapturedSubscribers(chatId)
+            let subscribers: Array<{
+              id: string | number
+              first_name: string
+              last_name?: string | null
+              username?: string | null
+              phone?: string | null
+              is_bot?: boolean
+            }> = await fetchAllChannelParticipants(chatId).catch(() => [])
+
+            if (subscribers.length === 0) {
+              subscribers = loadCapturedSubscribers(chatId)
+            }
+
             const contactsPayload = {
               chatId,
               title,
@@ -287,8 +300,8 @@ export async function syncChannelAudienceDiff(): Promise<void> {
                 is_bot: a.isBot,
                 role: a.role,
               })),
-              capturedSubscribersCount: capturedSubscribers.length,
-              capturedSubscribers,
+              subscribersCount: subscribers.length,
+              subscribers,
             }
 
             const jsonBuffer = Buffer.from(JSON.stringify(contactsPayload, null, 2), 'utf-8')
@@ -296,7 +309,7 @@ export async function syncChannelAudienceDiff(): Promise<void> {
             const fileName = `contacts_${safeTitle}_${chatId}.json`
 
             await bot.api.sendDocument(ownerChatId, new InputFile(jsonBuffer, fileName), {
-              caption: `📁 <b>${title}</b> - Kontaktlar va Adminlar ro'yxati (JSON fayl)`,
+              caption: `📁 <b>${title}</b>\n\n👥 <b>Jami a'zolar:</b> ${subscribers.length} ta\n🛡️ <b>Adminlar:</b> ${admins.length} ta\n\n✅ <i>Barcha obunachilar va adminlar to'liq ro'yxati (JSON fayl)</i>`,
               parse_mode: 'HTML',
             })
           } catch (docErr) {
