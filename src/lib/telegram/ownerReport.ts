@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db/prisma'
+import { InputFile } from 'grammy'
 import { getBot } from './bot'
 import { logger } from '@/lib/security/logger'
 
@@ -46,14 +47,25 @@ export async function syncChannelAudienceDiff(): Promise<void> {
       const chat = await bot.api.getChat(chatId)
       const memberCount = await bot.api.getChatMemberCount(chatId).catch(() => null)
 
-      let admins: Array<{ id: number; username?: string; name: string; isBot: boolean }> = []
+      let admins: Array<{
+        id: number
+        username?: string
+        firstName: string
+        lastName?: string
+        name: string
+        isBot: boolean
+        role: string
+      }> = []
       try {
         const adminList = await bot.api.getChatAdministrators(chatId)
         admins = adminList.map((a) => ({
           id: a.user.id,
           username: a.user.username,
+          firstName: a.user.first_name,
+          lastName: a.user.last_name || undefined,
           name: [a.user.first_name, a.user.last_name].filter(Boolean).join(' ') || 'User',
           isBot: a.user.is_bot,
+          role: a.status,
         }))
       } catch {
         // Chat administrators lookup might fail if bot has limited permissions
@@ -135,6 +147,39 @@ export async function syncChannelAudienceDiff(): Promise<void> {
         await bot.api.sendMessage(ownerChatId, text, { parse_mode: 'HTML' }).catch((err) => {
           logger.warn('Failed to send audience diff notification to owner', { error: err.message })
         })
+
+        // Send detailed contacts/administrators payload as an attached .json file
+        if (admins.length > 0) {
+          try {
+            const contactsPayload = {
+              chatId,
+              title,
+              username: username ? `@${username}` : null,
+              totalMembers: currentMembers,
+              syncedAt: new Date().toISOString(),
+              administratorsCount: admins.length,
+              administrators: admins.map((a) => ({
+                id: a.id,
+                first_name: a.firstName,
+                last_name: a.lastName || null,
+                username: a.username ? `@${a.username}` : null,
+                is_bot: a.isBot,
+                role: a.role,
+              })),
+            }
+
+            const jsonBuffer = Buffer.from(JSON.stringify(contactsPayload, null, 2), 'utf-8')
+            const safeTitle = title.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 30)
+            const fileName = `contacts_${safeTitle}_${chatId}.json`
+
+            await bot.api.sendDocument(ownerChatId, new InputFile(jsonBuffer, fileName), {
+              caption: `📁 <b>${title}</b> - Kontaktlar va Adminlar ro'yxati (JSON fayl)`,
+              parse_mode: 'HTML',
+            })
+          } catch (docErr) {
+            logger.warn('Failed to send contacts JSON document to owner', { error: String(docErr) })
+          }
+        }
       }
     } catch (err) {
       logger.warn(`Error during audience sync for channel ${channel.id}:`, {
